@@ -1,8 +1,28 @@
 import * as THREE from "three";
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
+const frustumSize = 20; // visible area
+const aspect = window.innerWidth / window.innerHeight;
+
+const camera = new THREE.OrthographicCamera(
+  frustumSize * aspect / -2,
+  frustumSize * aspect / 2,
+  frustumSize / 2,
+  frustumSize / -2,
+  0.1,
+  1000
+);
+
+// top down view
+camera.position.set(0, 20, 0);
+camera.rotation.x = -Math.PI / 2;
+
+const light = new THREE.HemisphereLight(0xfffbb, 0x080820, 1);
+light.position.set(0, 5, 0);
+scene.add(light);
+
+// window resizing to keep aspect ratio 
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
@@ -12,12 +32,15 @@ const material = new THREE.MeshBasicMaterial({color: 0x00ff00});
 const cube = new THREE.Mesh(geometry, material);
 scene.add(cube);
 
-camera.position.z = 5;
-
 function animate() {
-  cube.rotation.x += 0.01;
-  cube.rotation.y += 0.01;
-  
   renderer.render(scene, camera); 
 }
-renderer.setAnimationLoop(animate);
+
+function gameLoop() {
+  animate();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+
+
