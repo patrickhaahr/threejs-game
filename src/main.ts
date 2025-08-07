@@ -150,6 +150,10 @@ function gameLoop() {
   cube.position.add(cubeVelocity);
   cubeVelocity.multiplyScalar(friction);
   
+  // camera follows cube
+  camera.position.x = cube.position.x;
+  camera.position.z = cube.position.z;
+  
   renderer.render(scene, camera); 
   requestAnimationFrame(gameLoop);
 }
