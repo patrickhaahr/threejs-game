@@ -88,6 +88,22 @@ pauseText.style.display = 'none';
 pauseText.textContent = 'PAUSED - Press ESC to resume';
 document.body.appendChild(pauseText);
 
+// Game over screen
+const gameOverText = document.createElement('div');
+gameOverText.style.position = 'absolute';
+gameOverText.style.top = '50%';
+gameOverText.style.left = '50%';
+gameOverText.style.transform = 'translate(-50%, -50%)';
+gameOverText.style.color = 'red';
+gameOverText.style.fontFamily = 'Arial, sans-serif';
+gameOverText.style.fontSize = '64px';
+gameOverText.style.fontWeight = 'bold';
+gameOverText.style.zIndex = '300';
+gameOverText.style.display = 'none';
+gameOverText.style.textAlign = 'center';
+gameOverText.innerHTML = 'GAME OVER<br><span style="font-size: 24px;">Refresh to play again</span>';
+document.body.appendChild(gameOverText);
+
 // Cube
 const geometry = new THREE.BoxGeometry(1,1,1);
 const material = new THREE.MeshBasicMaterial({color: 0x00ff00});
@@ -137,6 +153,7 @@ let currentHealth = maxHealth;
 
 // game state
 let isPaused = false;
+let isGameOver = false;
 
 // cube physics
 const cubeVelocity = new THREE.Vector3(0, 0, 0);
@@ -335,10 +352,16 @@ function spawnEnemy() {
 }
 
 function gameLoop() {
-  // show/hide pause indicator
-  pauseText.style.display = isPaused ? 'block' : 'none';
+  // check for game over
+  if (currentHealth <= 0 && !isGameOver) {
+    isGameOver = true;
+  }
   
-  if (!isPaused) {
+  // show/hide pause and game over indicators
+  pauseText.style.display = isPaused ? 'block' : 'none';
+  gameOverText.style.display = isGameOver ? 'block' : 'none';
+  
+  if (!isPaused && !isGameOver) {
     updateBullets();
     updateEnemies();
     
@@ -370,41 +393,42 @@ function gameLoop() {
     cube.position.add(cubeVelocity);
     cubeVelocity.multiplyScalar(friction);
     
-  // boundary collision detection with randomized knockback
-  const minKnockback = 0.05;
-  const maxKnockback = 0.4; // can launch across the screen
-  const edgeDamage = 10;
-  
-  if (cube.position.x > boundaryX) {
-    cube.position.x = boundaryX;
-    const knockback = minKnockback + Math.random() * (maxKnockback - minKnockback);
-    cubeVelocity.x = -knockback; // knockback away from edge
-    currentHealth = Math.max(0, currentHealth - edgeDamage);
-  }
-  if (cube.position.x < -boundaryX) {
-    cube.position.x = -boundaryX;
-    const knockback = minKnockback + Math.random() * (maxKnockback - minKnockback);
-    cubeVelocity.x = knockback; // knockback away from edge
-    currentHealth = Math.max(0, currentHealth - edgeDamage);
-  }
-  if (cube.position.z > boundaryZ) {
-    cube.position.z = boundaryZ;
-    const knockback = minKnockback + Math.random() * (maxKnockback - minKnockback);
-    cubeVelocity.z = -knockback; // knockback away from edge
-    currentHealth = Math.max(0, currentHealth - edgeDamage);
-  }
-  if (cube.position.z < -boundaryZ) {
-    cube.position.z = -boundaryZ;
-    const knockback = minKnockback + Math.random() * (maxKnockback - minKnockback);
-    cubeVelocity.z = knockback; // knockback away from edge
-    currentHealth = Math.max(0, currentHealth - edgeDamage);
-  }    
+    // boundary collision detection with randomized knockback
+    const minKnockback = 0.05;
+    const maxKnockback = 0.4; // can launch across the screen
+    const edgeDamage = 10;
+    
+    if (cube.position.x > boundaryX) {
+      cube.position.x = boundaryX;
+      const knockback = minKnockback + Math.random() * (maxKnockback - minKnockback);
+      cubeVelocity.x = -knockback; // knockback away from edge
+      currentHealth = Math.max(0, currentHealth - edgeDamage);
+    }
+    if (cube.position.x < -boundaryX) {
+      cube.position.x = -boundaryX;
+      const knockback = minKnockback + Math.random() * (maxKnockback - minKnockback);
+      cubeVelocity.x = knockback; // knockback away from edge
+      currentHealth = Math.max(0, currentHealth - edgeDamage);
+    }
+    if (cube.position.z > boundaryZ) {
+      cube.position.z = boundaryZ;
+      const knockback = minKnockback + Math.random() * (maxKnockback - minKnockback);
+      cubeVelocity.z = -knockback; // knockback away from edge
+      currentHealth = Math.max(0, currentHealth - edgeDamage);
+    }
+    if (cube.position.z < -boundaryZ) {
+      cube.position.z = -boundaryZ;
+      const knockback = minKnockback + Math.random() * (maxKnockback - minKnockback);
+      cubeVelocity.z = knockback; // knockback away from edge
+      currentHealth = Math.max(0, currentHealth - edgeDamage);
+    }
+    
     // camera follows cube
     // camera.position.x = cube.position.x;
     // camera.position.z = cube.position.z;
   }
   
-  // update UI (always visible even when paused)
+  // update UI (always visible even when paused/game over)
   const healthPercentage = (currentHealth / maxHealth) * 100;
   healthFill.style.width = healthPercentage + '%';
   healthFill.style.backgroundColor = healthPercentage > 50 ? '#ff0000' : healthPercentage > 25 ? '#ff8800' : '#ff0000';
