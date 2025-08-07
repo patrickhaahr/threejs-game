@@ -53,6 +53,11 @@ let isMouseDown = false;
 let lastShotTime = 0;
 const shootingRate = 100; // milliseconds between shots
 
+// cube physics
+const cubeVelocity = new THREE.Vector3(0, 0, 0);
+const knockbackForce = 0.1;
+const friction = 0.95;
+
 
 // visual indicator for aiming point 
 const aimMarkerGeometry = new THREE.RingGeometry(0.2, 0.3, 32);
@@ -94,6 +99,10 @@ function shootBullet() {
     bullet.userData = { direction: direction };
     bullets.push(bullet);
     scene.add(bullet);
+    
+    // apply knockback to cube (opposite direction of bullet)
+    const knockback = direction.clone().multiplyScalar(-knockbackForce);
+    cubeVelocity.add(knockback);
   }
 }
 
@@ -136,6 +145,10 @@ function gameLoop() {
       lastShotTime = currentTime;
     }
   }
+  
+  // update cube physics
+  cube.position.add(cubeVelocity);
+  cubeVelocity.multiplyScalar(friction);
   
   renderer.render(scene, camera); 
   requestAnimationFrame(gameLoop);
