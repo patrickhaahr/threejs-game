@@ -370,24 +370,35 @@ function gameLoop() {
     cube.position.add(cubeVelocity);
     cubeVelocity.multiplyScalar(friction);
     
-    // boundary collision detection
-    if (cube.position.x > boundaryX) {
-      cube.position.x = boundaryX;
-      cubeVelocity.x = 0;
-    }
-    if (cube.position.x < -boundaryX) {
-      cube.position.x = -boundaryX;
-      cubeVelocity.x = 0;
-    }
-    if (cube.position.z > boundaryZ) {
-      cube.position.z = boundaryZ;
-      cubeVelocity.z = 0;
-    }
-    if (cube.position.z < -boundaryZ) {
-      cube.position.z = -boundaryZ;
-      cubeVelocity.z = 0;
-    }
-    
+  // boundary collision detection with randomized knockback
+  const minKnockback = 0.05;
+  const maxKnockback = 0.4; // can launch across the screen
+  const edgeDamage = 10;
+  
+  if (cube.position.x > boundaryX) {
+    cube.position.x = boundaryX;
+    const knockback = minKnockback + Math.random() * (maxKnockback - minKnockback);
+    cubeVelocity.x = -knockback; // knockback away from edge
+    currentHealth = Math.max(0, currentHealth - edgeDamage);
+  }
+  if (cube.position.x < -boundaryX) {
+    cube.position.x = -boundaryX;
+    const knockback = minKnockback + Math.random() * (maxKnockback - minKnockback);
+    cubeVelocity.x = knockback; // knockback away from edge
+    currentHealth = Math.max(0, currentHealth - edgeDamage);
+  }
+  if (cube.position.z > boundaryZ) {
+    cube.position.z = boundaryZ;
+    const knockback = minKnockback + Math.random() * (maxKnockback - minKnockback);
+    cubeVelocity.z = -knockback; // knockback away from edge
+    currentHealth = Math.max(0, currentHealth - edgeDamage);
+  }
+  if (cube.position.z < -boundaryZ) {
+    cube.position.z = -boundaryZ;
+    const knockback = minKnockback + Math.random() * (maxKnockback - minKnockback);
+    cubeVelocity.z = knockback; // knockback away from edge
+    currentHealth = Math.max(0, currentHealth - edgeDamage);
+  }    
     // camera follows cube
     // camera.position.x = cube.position.x;
     // camera.position.z = cube.position.z;
