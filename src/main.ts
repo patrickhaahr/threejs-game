@@ -18,7 +18,7 @@ const camera = new THREE.OrthographicCamera(
 camera.position.set(0, 20, 0);
 camera.rotation.x = -Math.PI / 2;
 
-const light = new THREE.HemisphereLight(0xfffbb, 0x080820, 1);
+const light = new THREE.HemisphereLight(0xffffbb, 0x080820, 1);
 light.position.set(0, 5, 0);
 scene.add(light);
 
@@ -108,6 +108,7 @@ document.body.appendChild(gameOverText);
 const geometry = new THREE.BoxGeometry(1,1,1);
 const material = new THREE.MeshBasicMaterial({color: 0x00ff00});
 const cube = new THREE.Mesh(geometry, material);
+cube.frustumCulled = false; // ensure always rendered in top-down ortho
 cube.position.set(0, 0.5, 0);
 scene.add(cube);
 
@@ -221,7 +222,11 @@ window.addEventListener("pointermove", updateAiming);
 
 function getBulletFromPool(): THREE.Mesh {
   if (bulletPool.length > 0) {
-    return bulletPool.pop()!;
+    const b = bulletPool.pop()!;
+    // ensure shared geometry/material are intact
+    b.geometry = bulletGeometry;
+    b.material = bulletMaterial;
+    return b;
   }
   return new THREE.Mesh(bulletGeometry, bulletMaterial);
 }
@@ -231,10 +236,6 @@ function returnBulletToPool(bullet: THREE.Mesh) {
   scene.remove(bullet);
   if (bulletPool.length < maxBulletPoolSize) {
     bulletPool.push(bullet);
-  } else {
-    // dispose if pool is full to prevent memory leaks
-    bullet.geometry.dispose();
-    (bullet.material as THREE.MeshBasicMaterial).dispose();
   }
 }
 
@@ -272,18 +273,17 @@ function updateBullets() {
     // check collision with enemies
     for (let j = enemies.length - 1; j >= 0; j--) {
       const enemy = enemies[j];
-      const distance = bullet.position.distanceTo(enemy.position);
-      
-      if (distance < 0.6) {
+      if (bullet.position.distanceToSquared(enemy.position) < 0.6 * 0.6) {
         // damage enemy
         enemy.userData.health -= bulletDamage;
         
         // update enemy color (optimized)
         updateEnemyColor(enemy);
         
-        // remove bullet
+        // remove bullet and continue to next
         returnBulletToPool(bullet);
         bullets.splice(i, 1);
+        continue;
         
         // remove enemy if health <= 0
         if (enemy.userData.health <= 0) {
@@ -313,8 +313,7 @@ function updateEnemies() {
     enemy.position.add(tempVector1.copy(tempVector2).multiplyScalar(enemySpeed));
     
     // check collision with cube (attack)
-    const distance = enemy.position.distanceTo(cube.position);
-    if (distance < 1.2) {
+    if (enemy.position.distanceToSquared(cube.position) < 1.2 * 1.2) {
       currentHealth = Math.max(0, currentHealth - enemyDamage);
       returnEnemyToPool(enemy);
       enemies.splice(i, 1);
@@ -360,8 +359,6 @@ function returnEnemyToPool(enemy: THREE.Mesh) {
   if (enemyPool.length < maxEnemyPoolSize) {
     enemyPool.push(enemy);
   } else {
-    // dispose if pool is full to prevent memory leaks
-    enemy.geometry.dispose();
     (enemy.material as THREE.MeshBasicMaterial).dispose();
   }
 }
@@ -447,6 +444,8 @@ function gameLoop() {
     // update cube physics
     cube.position.add(cubeVelocity);
     cubeVelocity.multiplyScalar(friction);
+    // keep cube on ground plane
+    cube.position.y = 0.5;
     
     // boundary collision detection with randomized knockback
     const minKnockback = 0.05;
