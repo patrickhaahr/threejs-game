@@ -73,6 +73,21 @@ ammoBar.appendChild(ammoFill);
 const ammoText = document.createElement('div');
 uiContainer.appendChild(ammoText);
 
+// Pause indicator
+const pauseText = document.createElement('div');
+pauseText.style.position = 'absolute';
+pauseText.style.top = '50%';
+pauseText.style.left = '50%';
+pauseText.style.transform = 'translate(-50%, -50%)';
+pauseText.style.color = 'white';
+pauseText.style.fontFamily = 'Arial, sans-serif';
+pauseText.style.fontSize = '48px';
+pauseText.style.fontWeight = 'bold';
+pauseText.style.zIndex = '200';
+pauseText.style.display = 'none';
+pauseText.textContent = 'PAUSED - Press ESC to resume';
+document.body.appendChild(pauseText);
+
 // Cube
 const geometry = new THREE.BoxGeometry(1,1,1);
 const material = new THREE.MeshBasicMaterial({color: 0x00ff00});
@@ -117,6 +132,9 @@ let lastReloadTime = 0;
 // health system
 const maxHealth = 100;
 let currentHealth = maxHealth;
+
+// game state
+let isPaused = false;
 
 // cube physics
 const cubeVelocity = new THREE.Vector3(0, 0, 0);
@@ -231,6 +249,12 @@ window.addEventListener("mouseup", (event) => {
   }
 });
 
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    isPaused = !isPaused;
+  }
+});
+
 function spawnEnemy() {
   const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
   
@@ -259,34 +283,65 @@ function spawnEnemy() {
 }
 
 function gameLoop() {
-  updateBullets();
-  updateEnemies();
+  // show/hide pause indicator
+  pauseText.style.display = isPaused ? 'block' : 'none';
   
-  const currentTime = Date.now();
-  
-  // spawn enemies
-  if (currentTime - lastEnemySpawnTime >= enemySpawnRate) {
-    spawnEnemy();
-    lastEnemySpawnTime = currentTime;
-  }
-  
-  // ammo reload system
-  if (!isMouseDown && currentAmmo < maxAmmo) {
-    if (currentTime - lastReloadTime >= (1000 / reloadRate)) {
-      currentAmmo++;
-      lastReloadTime = currentTime;
+  if (!isPaused) {
+    updateBullets();
+    updateEnemies();
+    
+    const currentTime = Date.now();
+    
+    // spawn enemies
+    if (currentTime - lastEnemySpawnTime >= enemySpawnRate) {
+      spawnEnemy();
+      lastEnemySpawnTime = currentTime;
     }
-  }
-  
-  // continuous shooting while mouse is held down
-  if (isMouseDown && targetPoint && currentAmmo > 0) {
-    if (currentTime - lastShotTime >= shootingRate) {
-      shootBullet();
-      lastShotTime = currentTime;
+    
+    // ammo reload system
+    if (!isMouseDown && currentAmmo < maxAmmo) {
+      if (currentTime - lastReloadTime >= (1000 / reloadRate)) {
+        currentAmmo++;
+        lastReloadTime = currentTime;
+      }
     }
+    
+    // continuous shooting while mouse is held down
+    if (isMouseDown && targetPoint && currentAmmo > 0) {
+      if (currentTime - lastShotTime >= shootingRate) {
+        shootBullet();
+        lastShotTime = currentTime;
+      }
+    }
+    
+    // update cube physics
+    cube.position.add(cubeVelocity);
+    cubeVelocity.multiplyScalar(friction);
+    
+    // boundary collision detection
+    if (cube.position.x > boundaryX) {
+      cube.position.x = boundaryX;
+      cubeVelocity.x = 0;
+    }
+    if (cube.position.x < -boundaryX) {
+      cube.position.x = -boundaryX;
+      cubeVelocity.x = 0;
+    }
+    if (cube.position.z > boundaryZ) {
+      cube.position.z = boundaryZ;
+      cubeVelocity.z = 0;
+    }
+    if (cube.position.z < -boundaryZ) {
+      cube.position.z = -boundaryZ;
+      cubeVelocity.z = 0;
+    }
+    
+    // camera follows cube
+    // camera.position.x = cube.position.x;
+    // camera.position.z = cube.position.z;
   }
   
-  // update UI
+  // update UI (always visible even when paused)
   const healthPercentage = (currentHealth / maxHealth) * 100;
   healthFill.style.width = healthPercentage + '%';
   healthFill.style.backgroundColor = healthPercentage > 50 ? '#ff0000' : healthPercentage > 25 ? '#ff8800' : '#ff0000';
@@ -296,32 +351,6 @@ function gameLoop() {
   ammoFill.style.width = ammoPercentage + '%';
   ammoFill.style.backgroundColor = ammoPercentage > 30 ? '#00ff00' : '#ff0000';
   ammoText.textContent = `Ammo: ${currentAmmo}/${maxAmmo}`;
-  
-  // update cube physics
-  cube.position.add(cubeVelocity);
-  cubeVelocity.multiplyScalar(friction);
-  
-  // boundary collision detection
-  if (cube.position.x > boundaryX) {
-    cube.position.x = boundaryX;
-    cubeVelocity.x = 0;
-  }
-  if (cube.position.x < -boundaryX) {
-    cube.position.x = -boundaryX;
-    cubeVelocity.x = 0;
-  }
-  if (cube.position.z > boundaryZ) {
-    cube.position.z = boundaryZ;
-    cubeVelocity.z = 0;
-  }
-  if (cube.position.z < -boundaryZ) {
-    cube.position.z = -boundaryZ;
-    cubeVelocity.z = 0;
-  }
-  
-  // camera follows cube
-  // camera.position.x = cube.position.x;
-  // camera.position.z = cube.position.z;
   
   renderer.render(scene, camera); 
   requestAnimationFrame(gameLoop);
