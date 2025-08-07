@@ -48,6 +48,11 @@ const bulletGeometry = new THREE.SphereGeometry(0.1, 8, 8);
 const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
 const bulletSpeed = 0.5;
 
+// shooting state
+let isMouseDown = false;
+let lastShotTime = 0;
+const shootingRate = 100; // milliseconds between shots
+
 
 // visual indicator for aiming point 
 const aimMarkerGeometry = new THREE.RingGeometry(0.2, 0.3, 32);
@@ -108,8 +113,30 @@ function updateBullets() {
 
 window.addEventListener("click", shootBullet);
 
+window.addEventListener("mousedown", (event) => {
+  if (event.button === 0) { // left mouse button
+    isMouseDown = true;
+  }
+});
+
+window.addEventListener("mouseup", (event) => {
+  if (event.button === 0) { // left mouse button
+    isMouseDown = false;
+  }
+});
+
 function gameLoop() {
   updateBullets();
+  
+  // continuous shooting while mouse is held down
+  if (isMouseDown && targetPoint) {
+    const currentTime = Date.now();
+    if (currentTime - lastShotTime >= shootingRate) {
+      shootBullet();
+      lastShotTime = currentTime;
+    }
+  }
+  
   renderer.render(scene, camera); 
   requestAnimationFrame(gameLoop);
 }
