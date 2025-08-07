@@ -58,6 +58,10 @@ const cubeVelocity = new THREE.Vector3(0, 0, 0);
 const knockbackForce = 0.1;
 const friction = 0.95;
 
+// boundary limits based on camera frustum
+const boundaryX = frustumSize * aspect / 2;
+const boundaryZ = frustumSize / 2;
+
 
 // visual indicator for aiming point 
 const aimMarkerGeometry = new THREE.RingGeometry(0.2, 0.3, 32);
@@ -150,9 +154,27 @@ function gameLoop() {
   cube.position.add(cubeVelocity);
   cubeVelocity.multiplyScalar(friction);
   
+  // boundary collision detection
+  if (cube.position.x > boundaryX) {
+    cube.position.x = boundaryX;
+    cubeVelocity.x = 0;
+  }
+  if (cube.position.x < -boundaryX) {
+    cube.position.x = -boundaryX;
+    cubeVelocity.x = 0;
+  }
+  if (cube.position.z > boundaryZ) {
+    cube.position.z = boundaryZ;
+    cubeVelocity.z = 0;
+  }
+  if (cube.position.z < -boundaryZ) {
+    cube.position.z = -boundaryZ;
+    cubeVelocity.z = 0;
+  }
+  
   // camera follows cube
-  camera.position.x = cube.position.x;
-  camera.position.z = cube.position.z;
+  // camera.position.x = cube.position.x;
+  // camera.position.z = cube.position.z;
   
   renderer.render(scene, camera); 
   requestAnimationFrame(gameLoop);
