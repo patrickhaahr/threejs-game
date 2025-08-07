@@ -38,6 +38,25 @@ uiContainer.style.fontSize = '16px';
 uiContainer.style.zIndex = '100';
 document.body.appendChild(uiContainer);
 
+// Health bar
+const healthBar = document.createElement('div');
+healthBar.style.width = '200px';
+healthBar.style.height = '20px';
+healthBar.style.border = '2px solid white';
+healthBar.style.marginBottom = '10px';
+uiContainer.appendChild(healthBar);
+
+const healthFill = document.createElement('div');
+healthFill.style.height = '100%';
+healthFill.style.backgroundColor = '#ff0000';
+healthFill.style.transition = 'width 0.1s';
+healthBar.appendChild(healthFill);
+
+const healthText = document.createElement('div');
+healthText.style.marginBottom = '10px';
+uiContainer.appendChild(healthText);
+
+// Ammo bar
 const ammoBar = document.createElement('div');
 ammoBar.style.width = '200px';
 ammoBar.style.height = '20px';
@@ -85,6 +104,10 @@ const maxAmmo = 20;
 let currentAmmo = maxAmmo;
 const reloadRate = 50; // ammo per second
 let lastReloadTime = 0;
+
+// health system
+const maxHealth = 100;
+let currentHealth = maxHealth;
 
 // cube physics
 const cubeVelocity = new THREE.Vector3(0, 0, 0);
@@ -199,6 +222,11 @@ function gameLoop() {
   }
   
   // update UI
+  const healthPercentage = (currentHealth / maxHealth) * 100;
+  healthFill.style.width = healthPercentage + '%';
+  healthFill.style.backgroundColor = healthPercentage > 50 ? '#ff0000' : healthPercentage > 25 ? '#ff8800' : '#ff0000';
+  healthText.textContent = `Health: ${currentHealth}/${maxHealth}`;
+  
   const ammoPercentage = (currentAmmo / maxAmmo) * 100;
   ammoFill.style.width = ammoPercentage + '%';
   ammoFill.style.backgroundColor = ammoPercentage > 30 ? '#00ff00' : '#ff0000';
