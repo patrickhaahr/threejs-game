@@ -112,11 +112,13 @@ const bulletSpeed = 0.5;
 // enemy system
 const enemies: THREE.Mesh[] = [];
 const enemyGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
-const enemyMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+const enemyMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff }); // blue initially
 const enemySpeed = 0.02;
 const enemyDamage = 1;
 const enemySpawnRate = 2000; // milliseconds
 let lastEnemySpawnTime = 0;
+const enemyMaxHealth = 3;
+const bulletDamage = 1;
 
 // shooting state
 let isMouseDown = false;
@@ -203,6 +205,53 @@ function updateBullets() {
     
     bullet.position.add(direction.clone().multiplyScalar(bulletSpeed));
     
+    // check collision with enemies
+    for (let j = enemies.length - 1; j >= 0; j--) {
+      const enemy = enemies[j];
+      const distance = bullet.position.distanceTo(enemy.position);
+      
+      if (distance < 0.6) {
+        // damage enemy
+        enemy.userData.health -= bulletDamage;
+        
+        // update enemy color based on health
+        const healthPercentage = enemy.userData.health / enemyMaxHealth;
+        const material = enemy.material as THREE.MeshBasicMaterial;
+        
+        if (healthPercentage > 0.66) {
+          // blue to dark purple transition (high health)
+          const t = (1 - healthPercentage) / 0.34; // 0 to 1 as health goes from 100% to 66%
+          const r = Math.floor(t * 64); // from 0 to 64 (darker purple)
+          const g = 0;
+          const b = Math.floor(255 - t * 127); // from 255 to 128 (darker purple)
+          material.color.setRGB(r/255, g/255, b/255);
+        } else if (healthPercentage > 0.33) {
+          // purple to red transition (medium health) - using darker purple
+          const t = (0.66 - healthPercentage) / 0.33; // 0 to 1 as health goes from 66% to 33%
+          const r = Math.floor(64 + t * 191); // from 64 to 255 (darker purple start)
+          const g = 0;
+          const b = Math.floor(128 - t * 128); // from 128 to 0 (darker purple start)
+          material.color.setRGB(r/255, g/255, b/255);
+        } else {
+          // red (low health)
+          material.color.setRGB(1, 0, 0);
+        }
+        
+        // remove bullet
+        scene.remove(bullet);
+        bullet.geometry.dispose();
+        bullets.splice(i, 1);
+        
+        // remove enemy if health <= 0
+        if (enemy.userData.health <= 0) {
+          scene.remove(enemy);
+          enemies.splice(j, 1);
+        }
+        
+        break;
+      }
+    }
+    
     // remove bullets that are too far or outside boundaries
     if (bullet.position.length() > 50 || 
         Math.abs(bullet.position.x) > boundaryX + 5 || 
@@ -256,7 +305,7 @@ window.addEventListener("keydown", (event) => {
 });
 
 function spawnEnemy() {
-  const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+  const enemy = new THREE.Mesh(enemyGeometry.clone(), enemyMaterial.clone());
   
   // spawn at random position on edge of screen
   const side = Math.floor(Math.random() * 4);
@@ -277,6 +326,9 @@ function spawnEnemy() {
       enemy.position.set(-boundaryX, 0.4, offsetZ);
       break;
   }
+  
+  // add health to enemy
+  enemy.userData = { health: enemyMaxHealth };
   
   enemies.push(enemy);
   scene.add(enemy);
