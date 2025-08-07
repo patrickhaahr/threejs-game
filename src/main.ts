@@ -119,22 +119,25 @@ const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const pointer = new THREE.Vector2();
 let targetPoint = new THREE.Vector3();
 
-// bullet system
+// bullet system with object pooling
 const bullets: THREE.Mesh[] = [];
+const bulletPool: THREE.Mesh[] = [];
 const bulletGeometry = new THREE.SphereGeometry(0.1, 8, 8);
 const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
 const bulletSpeed = 0.5;
+const maxBulletPoolSize = 50;
 
-// enemy system
+// enemy system with object pooling
 const enemies: THREE.Mesh[] = [];
+const enemyPool: THREE.Mesh[] = [];
 const enemyGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
-const enemyMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff }); // blue initially
 const enemySpeed = 0.02;
 const enemyDamage = 1;
 const enemySpawnRate = 2000; // milliseconds
 let lastEnemySpawnTime = 0;
 const enemyMaxHealth = 3;
 const bulletDamage = 1;
+const maxEnemyPoolSize = 30;
 
 // shooting state
 let isMouseDown = false;
@@ -151,6 +154,11 @@ let lastReloadTime = 0;
 const maxHealth = 100;
 let currentHealth = maxHealth;
 
+// performance monitoring
+let frameCount = 0;
+let lastFPSTime = Date.now();
+let currentFPS = 0;
+
 // game state
 let isPaused = false;
 let isGameOver = false;
@@ -159,6 +167,25 @@ let isGameOver = false;
 const cubeVelocity = new THREE.Vector3(0, 0, 0);
 const knockbackForce = 0.1;
 const friction = 0.95;
+
+function updateEnemyColor(enemy: THREE.Mesh) {
+  const healthPercentage = enemy.userData.health / enemyMaxHealth;
+  const material = enemy.material as THREE.MeshBasicMaterial;
+  
+  if (healthPercentage <= 0) {
+    material.color.setRGB(1, 0, 0); // red - dead
+  } else if (healthPercentage <= 0.33) {
+    material.color.setRGB(1, 0, 0); // red - very low health
+  } else if (healthPercentage <= 0.66) {
+    material.color.setRGB(0.5, 0, 0.5); // purple - medium health
+  } else {
+    material.color.setRGB(0, 0, 1); // blue - high health
+  }
+}
+
+// reusable vectors to avoid garbage collection
+const tempVector1 = new THREE.Vector3();
+const tempVector2 = new THREE.Vector3();
 
 // boundary limits based on camera frustum
 const boundaryX = frustumSize * aspect / 2;
@@ -192,23 +219,43 @@ function updateAiming(event: MouseEvent) {
 
 window.addEventListener("pointermove", updateAiming);
 
+function getBulletFromPool(): THREE.Mesh {
+  if (bulletPool.length > 0) {
+    return bulletPool.pop()!;
+  }
+  return new THREE.Mesh(bulletGeometry, bulletMaterial);
+}
+
+function returnBulletToPool(bullet: THREE.Mesh) {
+  bullet.visible = false;
+  scene.remove(bullet);
+  if (bulletPool.length < maxBulletPoolSize) {
+    bulletPool.push(bullet);
+  } else {
+    // dispose if pool is full to prevent memory leaks
+    bullet.geometry.dispose();
+    (bullet.material as THREE.MeshBasicMaterial).dispose();
+  }
+}
+
 function shootBullet() {
   if (targetPoint && currentAmmo > 0) {
-    const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+    const bullet = getBulletFromPool();
     bullet.position.copy(cube.position);
     bullet.position.y += 0.5;
+    bullet.visible = true;
     
-    const direction = new THREE.Vector3()
+    const direction = tempVector1
       .subVectors(targetPoint, cube.position)
       .normalize();
     
-    bullet.userData = { direction: direction };
+    bullet.userData = { direction: direction.clone() };
     bullets.push(bullet);
     scene.add(bullet);
     
-    // apply knockback to cube (opposite direction of bullet)
-    const knockback = direction.clone().multiplyScalar(-knockbackForce);
-    cubeVelocity.add(knockback);
+    // apply knockback to cube (reuse tempVector2)
+    tempVector2.copy(direction).multiplyScalar(-knockbackForce);
+    cubeVelocity.add(tempVector2);
     
     // consume ammo
     currentAmmo--;
@@ -220,7 +267,7 @@ function updateBullets() {
     const bullet = bullets[i];
     const direction = bullet.userData.direction;
     
-    bullet.position.add(direction.clone().multiplyScalar(bulletSpeed));
+    bullet.position.add(tempVector1.copy(direction).multiplyScalar(bulletSpeed));
     
     // check collision with enemies
     for (let j = enemies.length - 1; j >= 0; j--) {
@@ -231,37 +278,16 @@ function updateBullets() {
         // damage enemy
         enemy.userData.health -= bulletDamage;
         
-        // update enemy color based on health
-        const healthPercentage = enemy.userData.health / enemyMaxHealth;
-        const material = enemy.material as THREE.MeshBasicMaterial;
-        
-        if (healthPercentage > 0.66) {
-          // blue to dark purple transition (high health)
-          const t = (1 - healthPercentage) / 0.34; // 0 to 1 as health goes from 100% to 66%
-          const r = Math.floor(t * 64); // from 0 to 64 (darker purple)
-          const g = 0;
-          const b = Math.floor(255 - t * 127); // from 255 to 128 (darker purple)
-          material.color.setRGB(r/255, g/255, b/255);
-        } else if (healthPercentage > 0.33) {
-          // purple to red transition (medium health) - using darker purple
-          const t = (0.66 - healthPercentage) / 0.33; // 0 to 1 as health goes from 66% to 33%
-          const r = Math.floor(64 + t * 191); // from 64 to 255 (darker purple start)
-          const g = 0;
-          const b = Math.floor(128 - t * 128); // from 128 to 0 (darker purple start)
-          material.color.setRGB(r/255, g/255, b/255);
-        } else {
-          // red (low health)
-          material.color.setRGB(1, 0, 0);
-        }
+        // update enemy color (optimized)
+        updateEnemyColor(enemy);
         
         // remove bullet
-        scene.remove(bullet);
-        bullet.geometry.dispose();
+        returnBulletToPool(bullet);
         bullets.splice(i, 1);
         
         // remove enemy if health <= 0
         if (enemy.userData.health <= 0) {
-          scene.remove(enemy);
+          returnEnemyToPool(enemy);
           enemies.splice(j, 1);
         }
         
@@ -269,12 +295,10 @@ function updateBullets() {
       }
     }
     
-    // remove bullets that are too far or outside boundaries
-    if (bullet.position.length() > 50 || 
-        Math.abs(bullet.position.x) > boundaryX + 5 || 
-        Math.abs(bullet.position.z) > boundaryZ + 5) {
-      scene.remove(bullet);
-      bullet.geometry.dispose();
+    // remove bullets that hit screen boundaries immediately
+    if (Math.abs(bullet.position.x) > boundaryX || 
+        Math.abs(bullet.position.z) > boundaryZ) {
+      returnBulletToPool(bullet);
       bullets.splice(i, 1);
     }
   }
@@ -285,17 +309,14 @@ function updateEnemies() {
     const enemy = enemies[i];
     
     // move enemy toward cube
-    const direction = new THREE.Vector3()
-      .subVectors(cube.position, enemy.position)
-      .normalize();
-    
-    enemy.position.add(direction.clone().multiplyScalar(enemySpeed));
+    tempVector2.subVectors(cube.position, enemy.position).normalize();
+    enemy.position.add(tempVector1.copy(tempVector2).multiplyScalar(enemySpeed));
     
     // check collision with cube (attack)
     const distance = enemy.position.distanceTo(cube.position);
     if (distance < 1.2) {
       currentHealth = Math.max(0, currentHealth - enemyDamage);
-      scene.remove(enemy);
+      returnEnemyToPool(enemy);
       enemies.splice(i, 1);
     }
   }
@@ -321,8 +342,33 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
+function getEnemyFromPool(): THREE.Mesh {
+  if (enemyPool.length > 0) {
+    const enemy = enemyPool.pop()!;
+    // reset enemy color to blue
+    (enemy.material as THREE.MeshBasicMaterial).color.setRGB(0, 0, 1);
+    return enemy;
+  }
+  // create new enemy with its own material to prevent color conflicts
+  const material = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+  return new THREE.Mesh(enemyGeometry, material);
+}
+
+function returnEnemyToPool(enemy: THREE.Mesh) {
+  enemy.visible = false;
+  scene.remove(enemy);
+  if (enemyPool.length < maxEnemyPoolSize) {
+    enemyPool.push(enemy);
+  } else {
+    // dispose if pool is full to prevent memory leaks
+    enemy.geometry.dispose();
+    (enemy.material as THREE.MeshBasicMaterial).dispose();
+  }
+}
+
 function spawnEnemy() {
-  const enemy = new THREE.Mesh(enemyGeometry.clone(), enemyMaterial.clone());
+  const enemy = getEnemyFromPool();
+  enemy.visible = true;
   
   // spawn at random position on edge of screen
   const side = Math.floor(Math.random() * 4);
@@ -352,6 +398,15 @@ function spawnEnemy() {
 }
 
 function gameLoop() {
+  // FPS monitoring
+  frameCount++;
+  const now = Date.now();
+  if (now - lastFPSTime >= 1000) {
+    currentFPS = Math.round((frameCount * 1000) / (now - lastFPSTime));
+    frameCount = 0;
+    lastFPSTime = now;
+  }
+  
   // check for game over
   if (currentHealth <= 0 && !isGameOver) {
     isGameOver = true;
@@ -437,7 +492,7 @@ function gameLoop() {
   const ammoPercentage = (currentAmmo / maxAmmo) * 100;
   ammoFill.style.width = ammoPercentage + '%';
   ammoFill.style.backgroundColor = ammoPercentage > 30 ? '#00ff00' : '#ff0000';
-  ammoText.textContent = `Ammo: ${currentAmmo}/${maxAmmo}`;
+  ammoText.textContent = `Ammo: ${currentAmmo}/${maxAmmo} | Bullets: ${bullets.length} | Enemies: ${enemies.length} | Scene: ${scene.children.length} | FPS: ${currentFPS} | GPU Mem: ${renderer.info.memory.geometries}G ${renderer.info.memory.textures}T`;
   
   renderer.render(scene, camera); 
   requestAnimationFrame(gameLoop);
