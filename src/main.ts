@@ -42,6 +42,12 @@ const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const pointer = new THREE.Vector2();
 let targetPoint = new THREE.Vector3();
 
+// bullet system
+const bullets: THREE.Mesh[] = [];
+const bulletGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+const bulletSpeed = 0.5;
+
 
 // visual indicator for aiming point 
 const aimMarkerGeometry = new THREE.RingGeometry(0.2, 0.3, 32);
@@ -70,7 +76,40 @@ function updateAiming(event: MouseEvent) {
 
 window.addEventListener("pointermove", updateAiming);
 
+function shootBullet() {
+  if (targetPoint) {
+    const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+    bullet.position.copy(cube.position);
+    bullet.position.y += 0.5;
+    
+    const direction = new THREE.Vector3()
+      .subVectors(targetPoint, cube.position)
+      .normalize();
+    
+    bullet.userData = { direction: direction };
+    bullets.push(bullet);
+    scene.add(bullet);
+  }
+}
+
+function updateBullets() {
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const bullet = bullets[i];
+    const direction = bullet.userData.direction;
+    
+    bullet.position.add(direction.clone().multiplyScalar(bulletSpeed));
+    
+    if (bullet.position.length() > 50) {
+      scene.remove(bullet);
+      bullets.splice(i, 1);
+    }
+  }
+}
+
+window.addEventListener("click", shootBullet);
+
 function gameLoop() {
+  updateBullets();
   renderer.render(scene, camera); 
   requestAnimationFrame(gameLoop);
 }
