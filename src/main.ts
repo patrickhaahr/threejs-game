@@ -27,6 +27,33 @@ const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
+// UI Elements
+const uiContainer = document.createElement('div');
+uiContainer.style.position = 'absolute';
+uiContainer.style.top = '20px';
+uiContainer.style.left = '20px';
+uiContainer.style.color = 'white';
+uiContainer.style.fontFamily = 'Arial, sans-serif';
+uiContainer.style.fontSize = '16px';
+uiContainer.style.zIndex = '100';
+document.body.appendChild(uiContainer);
+
+const ammoBar = document.createElement('div');
+ammoBar.style.width = '200px';
+ammoBar.style.height = '20px';
+ammoBar.style.border = '2px solid white';
+ammoBar.style.marginBottom = '10px';
+uiContainer.appendChild(ammoBar);
+
+const ammoFill = document.createElement('div');
+ammoFill.style.height = '100%';
+ammoFill.style.backgroundColor = '#00ff00';
+ammoFill.style.transition = 'width 0.1s';
+ammoBar.appendChild(ammoFill);
+
+const ammoText = document.createElement('div');
+uiContainer.appendChild(ammoText);
+
 // Cube
 const geometry = new THREE.BoxGeometry(1,1,1);
 const material = new THREE.MeshBasicMaterial({color: 0x00ff00});
@@ -52,6 +79,12 @@ const bulletSpeed = 0.5;
 let isMouseDown = false;
 let lastShotTime = 0;
 const shootingRate = 100; // milliseconds between shots
+
+// ammo system
+const maxAmmo = 20;
+let currentAmmo = maxAmmo;
+const reloadRate = 50; // ammo per second
+let lastReloadTime = 0;
 
 // cube physics
 const cubeVelocity = new THREE.Vector3(0, 0, 0);
@@ -91,7 +124,7 @@ function updateAiming(event: MouseEvent) {
 window.addEventListener("pointermove", updateAiming);
 
 function shootBullet() {
-  if (targetPoint) {
+  if (targetPoint && currentAmmo > 0) {
     const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
     bullet.position.copy(cube.position);
     bullet.position.y += 0.5;
@@ -107,6 +140,9 @@ function shootBullet() {
     // apply knockback to cube (opposite direction of bullet)
     const knockback = direction.clone().multiplyScalar(-knockbackForce);
     cubeVelocity.add(knockback);
+    
+    // consume ammo
+    currentAmmo--;
   }
 }
 
@@ -117,8 +153,12 @@ function updateBullets() {
     
     bullet.position.add(direction.clone().multiplyScalar(bulletSpeed));
     
-    if (bullet.position.length() > 50) {
+    // remove bullets that are too far or outside boundaries
+    if (bullet.position.length() > 50 || 
+        Math.abs(bullet.position.x) > boundaryX + 5 || 
+        Math.abs(bullet.position.z) > boundaryZ + 5) {
       scene.remove(bullet);
+      bullet.geometry.dispose();
       bullets.splice(i, 1);
     }
   }
@@ -141,14 +181,28 @@ window.addEventListener("mouseup", (event) => {
 function gameLoop() {
   updateBullets();
   
+  // ammo reload system
+  const currentTime = Date.now();
+  if (!isMouseDown && currentAmmo < maxAmmo) {
+    if (currentTime - lastReloadTime >= (1000 / reloadRate)) {
+      currentAmmo++;
+      lastReloadTime = currentTime;
+    }
+  }
+  
   // continuous shooting while mouse is held down
-  if (isMouseDown && targetPoint) {
-    const currentTime = Date.now();
+  if (isMouseDown && targetPoint && currentAmmo > 0) {
     if (currentTime - lastShotTime >= shootingRate) {
       shootBullet();
       lastShotTime = currentTime;
     }
   }
+  
+  // update UI
+  const ammoPercentage = (currentAmmo / maxAmmo) * 100;
+  ammoFill.style.width = ammoPercentage + '%';
+  ammoFill.style.backgroundColor = ammoPercentage > 30 ? '#00ff00' : '#ff0000';
+  ammoText.textContent = `Ammo: ${currentAmmo}/${maxAmmo}`;
   
   // update cube physics
   cube.position.add(cubeVelocity);
