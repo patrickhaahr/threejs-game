@@ -94,6 +94,15 @@ const bulletGeometry = new THREE.SphereGeometry(0.1, 8, 8);
 const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
 const bulletSpeed = 0.5;
 
+// enemy system
+const enemies: THREE.Mesh[] = [];
+const enemyGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+const enemyMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+const enemySpeed = 0.02;
+const enemyDamage = 1;
+const enemySpawnRate = 2000; // milliseconds
+let lastEnemySpawnTime = 0;
+
 // shooting state
 let isMouseDown = false;
 let lastShotTime = 0;
@@ -187,6 +196,27 @@ function updateBullets() {
   }
 }
 
+function updateEnemies() {
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const enemy = enemies[i];
+    
+    // move enemy toward cube
+    const direction = new THREE.Vector3()
+      .subVectors(cube.position, enemy.position)
+      .normalize();
+    
+    enemy.position.add(direction.clone().multiplyScalar(enemySpeed));
+    
+    // check collision with cube (attack)
+    const distance = enemy.position.distanceTo(cube.position);
+    if (distance < 1.2) {
+      currentHealth = Math.max(0, currentHealth - enemyDamage);
+      scene.remove(enemy);
+      enemies.splice(i, 1);
+    }
+  }
+}
+
 window.addEventListener("click", shootBullet);
 
 window.addEventListener("mousedown", (event) => {
@@ -201,11 +231,46 @@ window.addEventListener("mouseup", (event) => {
   }
 });
 
+function spawnEnemy() {
+  const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+  
+  // spawn at random position on edge of screen
+  const side = Math.floor(Math.random() * 4);
+  const offsetX = (Math.random() - 0.5) * boundaryX * 2;
+  const offsetZ = (Math.random() - 0.5) * boundaryZ * 2;
+  
+  switch (side) {
+    case 0: // top
+      enemy.position.set(offsetX, 0.4, boundaryZ);
+      break;
+    case 1: // right
+      enemy.position.set(boundaryX, 0.4, offsetZ);
+      break;
+    case 2: // bottom
+      enemy.position.set(offsetX, 0.4, -boundaryZ);
+      break;
+    case 3: // left
+      enemy.position.set(-boundaryX, 0.4, offsetZ);
+      break;
+  }
+  
+  enemies.push(enemy);
+  scene.add(enemy);
+}
+
 function gameLoop() {
   updateBullets();
+  updateEnemies();
+  
+  const currentTime = Date.now();
+  
+  // spawn enemies
+  if (currentTime - lastEnemySpawnTime >= enemySpawnRate) {
+    spawnEnemy();
+    lastEnemySpawnTime = currentTime;
+  }
   
   // ammo reload system
-  const currentTime = Date.now();
   if (!isMouseDown && currentAmmo < maxAmmo) {
     if (currentTime - lastReloadTime >= (1000 / reloadRate)) {
       currentAmmo++;
